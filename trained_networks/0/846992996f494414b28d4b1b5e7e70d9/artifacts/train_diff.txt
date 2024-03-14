@@ -1,0 +1,1232 @@
+diff --git a/2106.01862.pdf b/2106.01862.pdf
+index 54faf46..a7a8bd7 100644
+Binary files a/2106.01862.pdf and b/2106.01862.pdf differ
+diff --git a/configs/eval_MVSEC.yml b/configs/eval_MVSEC.yml
+index 50950e9..3e65b0a 100644
+--- a/configs/eval_MVSEC.yml
++++ b/configs/eval_MVSEC.yml
+@@ -6,10 +6,13 @@ data:
+ 
+ model:
+     mask_output: True
+-    train_FATReLU_thre_enabled: True # True False
+-    thresholding_acti_RNN_hidden_state: True
+-    RNN_hidden_state_FATReLU: True
+-    RNN_No_Conv_State: False
++    train_FATReLU_thre_enabled: False # True False
++    thresholding_acti_RNN_hidden_state: False
++    RNN_hidden_state_FATReLU: False # effective only when thresholding_acti_RNN_hidden_state is true
++    RNN_No_Conv_State: False # NOT working
++    GradedLIF_RNN: False
++    single_RNN: False
++    RNN_2Conv_FATReLU: False
+ 
+ metrics:
+     name: [AEE]  # FWL, RSAT, AEE
+diff --git a/configs/parser.py b/configs/parser.py
+index 31f7bd0..2a34178 100644
+--- a/configs/parser.py
++++ b/configs/parser.py
+@@ -83,6 +83,7 @@ class YAMLParser:
+     def get_device(self):
+         cuda = torch.cuda.is_available()
+         self._device = torch.device("cuda:" + str(self._config["loader"]["gpu"]) if cuda else "cpu")
++        # self._device = torch.device("cpu")
+         self._loader_kwargs = {"num_workers": 0, "pin_memory": True} if cuda else {}
+ 
+     @staticmethod
+diff --git a/configs/train_ANN_G.yml b/configs/train_ANN_G.yml
+index da1be58..69aa1c9 100644
+--- a/configs/train_ANN_G.yml
++++ b/configs/train_ANN_G.yml
+@@ -7,7 +7,7 @@ data:
+     window_loss: 10000 # events
+ 
+ model:
+-    name: FireNet # for other models available, see models/model.py
++    name: FireNet_Sparsify # for other models available, see models/model.py
+     encoding: cnt # voxel/cnt
+     round_encoding: False # for voxel encoding
+     norm_input: False # normalize input
+@@ -16,19 +16,23 @@ model:
+     kernel_size: 3
+     activations: [relu, Null] # activations for ff and rec neurons
+     mask_output: True
+-    train_FATReLU_thre_enabled: True # True False
++    train_FATReLU_thre_enabled: False # True False
+     thresholding_acti_RNN_hidden_state: False
+     RNN_hidden_state_FATReLU: False # effective only when thresholding_acti_RNN_hidden_state is true
+     RNN_No_Conv_State: False # NOT working
+-    GradedLIF_RNN: True
++    GradedLIF_RNN: False
++    single_RNN: False
++    RNN_2Conv_FATReLU: True
+ 
+ sparsify:
+     regularize_voltage_enable: True
+     regularizer_voltage: L1 # L1 L2 Hoyer
+-    regularize_threshold_enable: True
++    regularize_threshold_enable: False
+     regularizer_threshold: L2 #  L2 Hoyer
+     FATReLU_thre_init: None # save_acti_stat/f9f9f18812eb41bb86e82a75f4413162/thre_70_70/ # "save_acti_stat/activation_log_07c87f/thre_60/" # None
+-    regularizer_weight: 0.5e-7 # save for all regularizers
++    regularizer_weight: 1.0
++    regularizer_weight_voltage: 1.0 # to be overwritten by --input
++    regularizer_weight_threshold: 1.0 # to be overwritten by --input
+ 
+ spiking_neuron: Null
+     
+@@ -41,7 +45,7 @@ optimizer:
+     name: AdamW # AdamW Adam
+     lr: 0.0002 # 0.0002 2e-4 for training, 2e-4 for fine-tuning (for now)
+     weight_decay: 0.01 # 0.01 is the default of AdamW
+-    OneCycleLR_scheduler: False
++    OneCycleLR_scheduler: True
+ 
+ loader:
+     n_epochs: 100 # 100 for training, 20 for fine-tuning (for now)
+diff --git a/configs/train_SNN_G.yml b/configs/train_SNN_G.yml
+index b2334e9..608033f 100644
+--- a/configs/train_SNN_G.yml
++++ b/configs/train_SNN_G.yml
+@@ -7,7 +7,7 @@ data:
+     window_loss: 10000 # events
+ 
+ model:
+-    name: LIFFireNet # for other models available, see models/model.py
++    name: LIFFireNet # LIFFireNet Graded_LIFFireNet
+     encoding: cnt # voxel/cnt
+     round_encoding: False # for voxel encoding
+     norm_input: False # normalize input
+@@ -16,6 +16,24 @@ model:
+     kernel_size: 3
+     activations: [arctanspike, arctanspike] # activations for ff and rec neurons
+     mask_output: True
++    train_FATReLU_thre_enabled: False # True False
++    thresholding_acti_RNN_hidden_state: False
++    RNN_hidden_state_FATReLU: False # effective only when thresholding_acti_RNN_hidden_state is true
++    RNN_No_Conv_State: False # NOT working
++    GradedLIF_RNN: False
++    single_RNN: False
++    RNN_2Conv_FATReLU: False
++
++
++sparsify:
++    regularize_voltage_enable: True # True False
++    regularizer_voltage: L1 # L1 L2 Hoyer
++    regularize_threshold_enable: True
++    regularizer_threshold: L2 #  L2 Hoyer
++    FATReLU_thre_init: None
++    regularizer_weight: 1.0
++    regularizer_weight_voltage: 1.0 # to be overwritten by --input
++    regularizer_weight_threshold: 1.0 # to be overwritten by --input
+ 
+ spiking_neuron:
+     leak: [-4.0, 0.1]
+@@ -30,8 +48,10 @@ loss:
+     overwrite_intermediate: False
+ 
+ optimizer:
+-    name: Adam
++    name: AdamW
+     lr: 0.0002
++    weight_decay: 0.01 # 0.01 is the default of AdamW
++    OneCycleLR_scheduler: True
+ 
+ loader:
+     n_epochs: 100
+@@ -39,7 +59,7 @@ loader:
+     resolution: [128, 128] # H x W
+     augment: ["Horizontal", "Vertical", "Polarity"]
+     augment_prob: [0.5, 0.5, 0.5]
+-    gpu: 1
++    gpu: 0
+ 
+ vis:
+     verbose: True
+diff --git a/eval_flow.py b/eval_flow.py
+index e234a0b..63b8f68 100644
+--- a/eval_flow.py
++++ b/eval_flow.py
+@@ -11,6 +11,7 @@ from configs.parser import YAMLParser
+ from dataloader.h5 import H5Loader
+ from loss.flow import FWL, RSAT, AEE
+ from models.model import (
++    FireNet_Sparsify,
+     FireNet,
+     RNNFireNet,
+     LeakyFireNet,
+@@ -23,6 +24,7 @@ from models.model import (
+     RNNRecEVFlowNet,
+ )
+ from models.model import (
++    Graded_LIFFireNet,
+     LIFFireNet,
+     PLIFFireNet,
+     ALIFFireNet,
+@@ -193,13 +195,10 @@ def test(args, config_parser):
+                 sparsity_channel_list = [] # log the channel-wise density, should be len = 2+32*7+2
+ 
+                 for key, value in x["activity"].items():
+-                # for key, value in x["acti_after_thresholding"].items(): # for ANN neuron states after FATReLU
+ 
+                     # print(key, value.size())
+                     sparsity_neuron[key] = torch.count_nonzero(value.detach()) / torch.numel(value.detach()) # ann activation sparsity of each layer, the avg of this batch
+                     sparsity_pixel[key] = torch.count_nonzero(torch.sum(value, dim=1).detach()) / torch.numel(torch.sum(value, dim=1).detach())
+-                    # sparsity_neuron[key] = torch.count_nonzero(value[1, :].detach()) / torch.numel(value[1, :].detach()) # snn spike sparsity of each layer, the avg of this batch
+-                    # sparsity_pixel[key] = torch.count_nonzero(torch.sum(value[1, :], dim=1).detach()) / torch.numel(torch.sum(value[1, :], dim=1).detach())
+ 
+                     sparsity_neuron_list_single_frame.append(sparsity_neuron[key].cpu())
+                     sparsity_pixel_list_single_frame.append(sparsity_pixel[key].cpu())
+@@ -382,6 +381,7 @@ def test(args, config_parser):
+                 results[metric + "_percent"] = {}
+             
+             for key in val_results.keys():
++                # print(key)    
+                 metric_value = val_results[key][metric]["metric"] / val_results[key][metric]["it"]
+                 results[metric][key] = str(metric_value)
+                 metric_list.append(metric_value)
+@@ -389,10 +389,12 @@ def test(args, config_parser):
+                     percent_value = val_results[key][metric]["percent"] / val_results[key][metric]["it"]
+                     results[metric + "_percent"][key] = str(percent_value)
+                     percent_list.append(percent_value)
+-                    
++
++            print("Each sequence " + metric + ": ", metric_list)
+             print("average " + metric + ": " + str(np.mean(metric_list)))
+             results[metric]['avg'] = str(np.mean(metric_list))
+             if metric == "AEE":
++                print("Each sequence " + metric + " percent: ", percent_list)
+                 print("average " + metric + " percent: " + str(np.mean(percent_list)))
+                 results[metric + "_percent"]['avg'] = str(np.mean(percent_list))
+ 
+diff --git a/models/model.py b/models/model.py
+index c8f9c30..abb664b 100644
+--- a/models/model.py
++++ b/models/model.py
+@@ -15,8 +15,11 @@ from .spiking_submodules import (
+     ConvPLIFRecurrent,
+     ConvXLIF,
+     ConvXLIFRecurrent,
++    ConvLIF_Graded,
++    ConvLIF_Graded,
++    ConvLIFRecurrent_Graded,
+ )
+-from .submodules import ConvGRU, ConvLayer, ConvLayer_, ConvLeaky, ConvLeakyRecurrent, ConvRecurrent, ConvRecurrentSoftsign, ConvRecurrentSoftsignThreshold, ConvRecurrentFATReLU, ConvRecurrentGradedLIF
++from .submodules import ConvGRU, ConvLayer, ConvLayer_, ConvLeaky, ConvLeakyRecurrent, ConvRecurrent, ConvRecurrentSoftsign, ConvRecurrentSoftsignThreshold, ConvRecurrentFATReLU, ConvRecurrentGradedLIF, ConvRecurrentFATReLU_2Conv
+ from .unet import (
+     UNetRecurrent,
+     MultiResUNet,
+@@ -144,14 +147,155 @@ class E2VID(BaseModel):
+             flow = flow.contiguous()
+ 
+         return {"flow": [flow], "activity": activity}
++    
+ 
+-
+-class FireNet(BaseModel):
++class FireNet(BaseModel): # Fede original
+     """
+     FireNet architecture (adapted for optical flow estimation), as described in the paper "Fast Image
+     Reconstruction with an Event Camera", Scheerlinck et al., WACV 2020.
+     """
+ 
++    head_neuron = ConvLayer_
++    ff_neuron = ConvLayer_
++    rec_neuron = ConvGRU
++    residual = False
++    num_recurrent_units = 7
++    kwargs = [{}] * num_recurrent_units
++    w_scale_pred = None
++
++    def __init__(self, unet_kwargs):
++        super().__init__()
++        self.num_bins = unet_kwargs["num_bins"]
++        base_num_channels = unet_kwargs["base_num_channels"]
++        kernel_size = unet_kwargs["kernel_size"]
++        self.encoding = unet_kwargs["encoding"]
++        self.norm_input = False if "norm_input" not in unet_kwargs.keys() else unet_kwargs["norm_input"]
++        self.mask = unet_kwargs["mask_output"]
++        ff_act, rec_act = unet_kwargs["activations"]
++        if type(unet_kwargs["spiking_neuron"]) is dict:
++            for kwargs in self.kwargs:
++                kwargs.update(unet_kwargs["spiking_neuron"])
++
++        self.head = self.head_neuron(self.num_bins, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[0])
++
++        self.G1 = self.rec_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=rec_act, **self.kwargs[1]
++        )
++        self.R1a = self.ff_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[2]
++        )
++        self.R1b = self.ff_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[3]
++        )
++
++        self.G2 = self.rec_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=rec_act, **self.kwargs[4]
++        )
++        self.R2a = self.ff_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[5]
++        )
++        self.R2b = self.ff_neuron(
++            base_num_channels, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[6]
++        )
++
++        self.pred = ConvLayer(
++            base_num_channels, out_channels=2, kernel_size=1, activation="tanh", w_scale=self.w_scale_pred
++        )
++
++        self.reset_states()
++
++    @property
++    def states(self):
++        return copy_states(self._states)
++
++    @states.setter
++    def states(self, states):
++        self._states = states
++
++    def detach_states(self):
++        detached_states = []
++        for state in self.states:
++            if type(state) is tuple:
++                tmp = []
++                for hidden in state:
++                    tmp.append(hidden.detach())
++                detached_states.append(tuple(tmp))
++            else:
++                detached_states.append(state.detach())
++        self.states = detached_states
++
++    def reset_states(self):
++        self._states = [None] * self.num_recurrent_units
++
++    def init_cropping(self, width, height):
++        pass
++
++    def forward(self, event_voxel, event_cnt, log=False):
++        """
++        :param event_voxel: N x num_bins x H x W
++        :param event_cnt: N x 4 x H x W per-polarity event cnt and average timestamp
++        :param log: log activity
++        :return: output dict with list of [N x 2 X H X W] (x, y) displacement within event_tensor.
++        """
++
++        # input encoding
++        if self.encoding == "voxel":
++            x = event_voxel
++        elif self.encoding == "cnt" and self.num_bins == 2:
++            x = event_cnt
++        else:
++            print("Model error: Incorrect input encoding.")
++            raise AttributeError
++
++        # normalize input
++        if self.norm_input:
++            mean, stddev = (
++                x[x != 0].mean(),
++                x[x != 0].std(),
++            )
++            x[x != 0] = (x[x != 0] - mean) / stddev
++
++        # forward pass
++        x1, self._states[0] = self.head(x, self._states[0])
++
++        x2, self._states[1] = self.G1(x1, self._states[1])
++        x3, self._states[2] = self.R1a(x2, self._states[2])
++        x4, self._states[3] = self.R1b(x3, self._states[3], residual=x2 if self.residual else 0)
++
++        x5, self._states[4] = self.G2(x4, self._states[4])
++        x6, self._states[5] = self.R2a(x5, self._states[5])
++        x7, self._states[6] = self.R2b(x6, self._states[6], residual=x5 if self.residual else 0)
++
++        flow = self.pred(x7)
++
++        # log activity
++        if log:
++            activity = {}
++            name = [
++                "0:input",
++                "1:head",
++                "2:G1",
++                "3:R1a",
++                "4:R1b",
++                "5:G2",
++                "6:R2a",
++                "7:R2b",
++                "8:pred",
++            ]
++            for n, l in zip(name, [x, x1, x2, x3, x4, x5, x6, x7, flow]):
++                activity[n] = l.detach().ne(0).float().mean().item()
++        else:
++            activity = None
++
++        return {"flow": [flow], "activity": activity}
++
++
++class FireNet_Sparsify(BaseModel):
++    """
++    FireNet_Sparsify architecture (adapted for optical flow estimation), as described in the paper "Fast Image
++    Reconstruction with an Event Camera", Scheerlinck et al., WACV 2020.
++    """
++
+     head_neuron = ConvLayer_ # 类变量 http://c.biancheng.net/view/2283.html 
+     ff_neuron = ConvLayer_
+     rec_neuron = ConvRecurrentSoftsign # ConvGRU ConvRecurrent ConvRecurrentSoftsign
+@@ -175,6 +319,12 @@ class FireNet(BaseModel):
+         self.train_FATReLU = firenet_kwargs["train_FATReLU_thre_enabled"]
+         self.is_SNN = "LIF" in firenet_kwargs["name"]
+ 
++        self.RNN_2Conv_FATReLU = firenet_kwargs["RNN_2Conv_FATReLU"]
++
++        if self.RNN_2Conv_FATReLU:
++            assert(firenet_kwargs["thresholding_acti_RNN_hidden_state"] == False)
++            self.rec_neuron = ConvRecurrentFATReLU_2Conv
++
+         if firenet_kwargs["thresholding_acti_RNN_hidden_state"]:
+             if firenet_kwargs["RNN_hidden_state_FATReLU"]:
+                 self.rec_neuron = ConvRecurrentFATReLU
+@@ -184,8 +334,15 @@ class FireNet(BaseModel):
+         else:
+             self.thresholding_acti_RNN_hidden_state = False
+ 
++        if self.is_SNN:
++            assert(self.thresholding_acti_RNN_hidden_state == False)
++            assert(self.train_FATReLU == False)
++            assert(self.RNN_2Conv_FATReLU == False)
++            print("SNN FireNet!", firenet_kwargs["name"])
++
+         if firenet_kwargs["GradedLIF_RNN"]:
+             assert(self.thresholding_acti_RNN_hidden_state == False)
++            assert(self.is_SNN == False)
+             self.rec_neuron = ConvRecurrentGradedLIF
+             self.GradedLIF_RNN = True
+         else:
+@@ -197,6 +354,10 @@ class FireNet(BaseModel):
+             self.G1 = self.rec_neuron(
+                 base_num_channels, base_num_channels, kernel_size, activation=rec_act, NoConvState=firenet_kwargs["RNN_No_Conv_State"], **self.kwargs[1]
+             )
++        elif firenet_kwargs["single_RNN"]:
++            self.G1 = self.ff_neuron(
++                base_num_channels, base_num_channels, kernel_size, activation=ff_act, **self.kwargs[1]
++            )
+         else:
+             self.G1 = self.rec_neuron(
+                 base_num_channels, base_num_channels, kernel_size, activation=rec_act, **self.kwargs[1]
+@@ -248,13 +409,10 @@ class FireNet(BaseModel):
+         else:
+             # self.FATReLU_threshold = [0.0, 1.0, 1.8, 0.6, 0.5, 0.4, 0.1, 0.07, 0.0] # manually searched threshold for FATReLU NOTE this is only for benchmarkng the manual search method.
+             self.FATReLU_threshold = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] # manually set them here if the binarize threshold is not trainable. One threshold for each layer.
+-        
+-        if self.is_SNN:
+-            self.rv = torch.nn.ReLU(inplace=True) # relu_for_voltage
+ 
+         self.reset_states()
+     
+-        print("FireNet initialized!")
++        # print("FireNet initialized!")
+ 
+     @property # https://zhuanlan.zhihu.com/p/64487092
+     def states(self):
+@@ -403,8 +561,8 @@ class FireNet(BaseModel):
+             # for ANN
+             if self.training:
+                 if self.is_SNN:
+-                    # for SNN voltage: # TODO
+-                    for n, l in zip(name, [torch.stack([x, x]), self.rv(self._states[0]), self.rv(self._states[1]), self.rv(self._states[2]), self.rv(self._states[3]), self.rv(self._states[4]), self.rv(self._states[5]), self.rv(self._states[6]), torch.stack([flow, flow])]):
++                    # for SNN voltage:
++                    for n, l in zip(name, [x, (self._states[0][0]), (self._states[1][0]), (self._states[2][0]), (self._states[3][0]), (self._states[4][0]), (self._states[5][0]), (self._states[6][0]), flow]):
+                         # activity[n] = l.detach().ne(0).float().mean().item()
+                         activity[n] = l
+                     for n, l in zip(name, [x, x1, x2, x3, x4, x5, x6, x7, flow]):
+@@ -421,14 +579,15 @@ class FireNet(BaseModel):
+                     elif self.GradedLIF_RNN:
+                         activity["2:G1_state"] = self._states[1][1] 
+                         activity["5:G2_state"] = self._states[4][1]
+-                    else: # when we do not have the thresholding in rnn hidden state activation, add the hidden state of rnn after activation to the dict and we may punish it.
++                    elif not self.RNN_2Conv_FATReLU: # when we do not have the thresholding in rnn hidden state activation, add the hidden state of rnn after activation to the dict and we may punish it.
+                         activity["2:G1_state"] = self._states[1]
+                         activity["5:G2_state"] = self._states[4]
++                    # with the above conditions, we do not care about the rnn hidden state. When self.RNN_2Conv_FATReLU, the rnn state is the same as the output of the rnn, so we do not need to add it to the dict.
+ 
+                     if self.GradedLIF_RNN:
+                         acti_after_thresholding["2:G1_state"] = self._states[1][0] # add the output of the Graded LIF to the dict
+                         acti_after_thresholding["5:G2_state"] = self._states[4][0]
+-                    else:
++                    elif not self.RNN_2Conv_FATReLU:
+                         acti_after_thresholding["2:G1_state"] = self._states[1] # add the hidden state of rnn to the dict
+                         acti_after_thresholding["5:G2_state"] = self._states[4]
+             else:
+@@ -440,13 +599,18 @@ class FireNet(BaseModel):
+                     if self.GradedLIF_RNN:
+                         activity["2:G1_state"] = self._states[1][0]
+                         activity["5:G2_state"] = self._states[4][0]
+-                    else:
++                    elif not self.RNN_2Conv_FATReLU:
+                         activity["2:G1_state"] = self._states[1]
+                         activity["5:G2_state"] = self._states[4]
+ 
+                     acti_after_thresholding = None
+ 
+-                # else: # SNN TODO
++                else: # SNN
++                    for n, l in zip(name, [x, x1, x2, x3, x4, x5, x6, x7, flow]):
++                        # activity[n] = l.detach().ne(0).float().mean().item()
++                        activity[n] = l
++
++                    acti_after_thresholding = None
+         else:
+             activity = None
+ 
+@@ -455,6 +619,7 @@ class FireNet(BaseModel):
+             acti_after_thresholding = dict(sorted(acti_after_thresholding.items()))
+ 
+         return {"flow": [flow], "activity": activity, "acti_after_thresholding": acti_after_thresholding}
++ 
+ 
+ 
+ class EVFlowNet(BaseModel):
+@@ -804,7 +969,7 @@ class LeakyFireNet(FireNet):
+     residual = False
+ 
+ 
+-class LIFFireNet(FireNet):
++class LIFFireNet(FireNet_Sparsify): # FireNet_Sparsify  FireNet
+     """
+     Spiking FireNet architecture of LIF neurons for dense optical flow estimation from events.
+     """
+@@ -816,6 +981,18 @@ class LIFFireNet(FireNet):
+     w_scale_pred = 0.01
+ 
+ 
++class Graded_LIFFireNet(FireNet_Sparsify): # FireNet_Sparsify  FireNet
++    """
++    Spiking FireNet architecture of LIF neurons for dense optical flow estimation from events.
++    """
++
++    head_neuron = ConvLIF_Graded
++    ff_neuron = ConvLIF_Graded
++    rec_neuron = ConvLIFRecurrent_Graded # ConvLIFRecurrent_Graded ConvLIF_Graded
++    residual = False
++    w_scale_pred = 0.01
++
++
+ class PLIFFireNet(FireNet):
+     """
+     Spiking FireNet architecture of PLIF neurons for dense optical flow estimation from events.
+diff --git a/models/spiking_submodules.py b/models/spiking_submodules.py
+index d96dc23..1036dad 100644
+--- a/models/spiking_submodules.py
++++ b/models/spiking_submodules.py
+@@ -113,15 +113,7 @@ class ConvLIF(nn.Module):
+         thresh = self.thresh.clamp_min(0.01)
+ 
+         # get leak
+-        leak = torch.sigmoid(self.leak) # ask FEDE
+-
+-        # ###################### Guangzhi
+-        # v = v - z.detach() # reset to thresh, z is prev output
+-        # v = v * (1.0 - z.detach().gt(0).float()) # hard reset to zero
+-        # v = v * leak # leak
+-        # v = v + (1 - leak) * ff # I 
+-        # z = torch.relu(v - thresh) # fire
+-        # ######################
++        leak = torch.sigmoid(self.leak) # 
+ 
+         # detach reset
+         if self.detach:
+@@ -142,6 +134,121 @@ class ConvLIF(nn.Module):
+         z_out = self.spike_fn(v_out, thresh, self.act_width)
+ 
+         return z_out + residual, torch.stack([v_out, z_out]) # ?? what is "residual" here?
++    
++
++class ConvLIF_Graded(nn.Module):
++    """
++    Guangzhi
++    """
++
++    def __init__(
++        self,
++        input_size,
++        hidden_size,
++        kernel_size,
++        stride=1,
++        activation="arctanspike",
++        act_width=10.0,
++        leak=(-4.0, 0.1),
++        thresh=(0.8, 0.0),
++        learn_leak=True,
++        learn_thresh=True,
++        hard_reset=True,
++        detach=True,
++        norm=None,
++    ):
++        super().__init__()
++
++        # shapes
++        padding = kernel_size // 2
++        self.input_size = input_size
++        self.hidden_size = hidden_size
++        # here the hidden_size is base_num_channels in model.py. It is the number of channels of
++        # the output tensor of a conv layer. It is the number of neurons in a conv layer.
++
++        # parameters
++        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, stride=stride, padding=padding, bias=False)
++        if learn_leak:
++            self.leak = nn.Parameter(torch.randn(hidden_size, 1, 1) * leak[1] + leak[0])
++        else:
++            self.register_buffer("leak", torch.randn(hidden_size, 1, 1) * leak[1] + leak[0])
++        if learn_thresh:
++            # self.thresh = nn.Parameter(torch.randn(hidden_size, 1, 1) * thresh[1] + thresh[0])
++            self.thresh = nn.Parameter(torch.zeros(hidden_size, 1, 1)) # initialize the threshold to zeros to get more spikes
++        else:
++            self.register_buffer("thresh", torch.randn(hidden_size, 1, 1) * thresh[1] + thresh[0])
++            # If you have parameters in your model, which should be saved and restored in the state_dict, but not trained by the optimizer, you should register them as buffers.
++            # Buffers won’t be returned in model.parameters(), so that the optimizer won’t update them.
++
++        # weight init
++        w_scale = math.sqrt(1 / input_size)
++        nn.init.uniform_(self.ff.weight, -w_scale, w_scale)
++
++        # spiking and reset mechanics
++        assert isinstance(
++            activation, str
++        ), "Spiking neurons need a valid activation, see models/spiking_util.py for choices"
++        self.spike_fn = getattr(spiking, activation)
++        self.register_buffer("act_width", torch.tensor(act_width))
++        self.hard_reset = hard_reset
++        self.detach = detach
++
++        # norm
++        if norm == "weight":
++            self.ff = nn.utils.weight_norm(self.ff)
++            self.norm = None
++        elif norm == "group":
++            groups = min(1, input_size // 4)  # at least instance norm
++            self.norm = nn.GroupNorm(groups, input_size)
++        else:
++            self.norm = None
++
++    def forward(self, input_, prev_state, residual=0):
++        # input current
++        if self.norm is not None:
++            input_ = self.norm(input_)
++        ff = self.ff(input_)
++
++        # generate empty prev_state, if None is provided
++        if prev_state is None:
++            prev_state = torch.zeros(2, *ff.shape, dtype=ff.dtype, device=ff.device) # The star(*) operator unpacks the sequence/collection into positional arguments. So if you have a list and want to pass the items of that list as arguments for each position as they are there in the list, instead of indexing each element individually, you could just use the * operator.
++        v, z = prev_state  # unbind op, removes dimension # prev_state: torch.Size([2, bs, 32, h, w])
++        # print(v.shape) # bs, 32, h, w
++
++        # clamp thresh
++        thresh = self.thresh.clamp_min(0.01)
++
++        # get leak
++        leak = torch.sigmoid(self.leak) # 
++
++        # ###################### Guangzhi
++        # v = v - z.detach() # reset to thresh, z is prev output
++        # v = v * (1.0 - z.detach().gt(0).float()) # hard reset to zero
++        # v = v * leak # leak
++        # v = v + (1 - leak) * ff # I 
++        # z = torch.relu(v - thresh) # fire
++        # ######################
++
++        # detach reset
++        if self.detach:
++            z = z.detach()
++
++        # voltage update: decay, reset, add
++        if self.hard_reset:
++            v_out = v * leak * (1 - z.gt(0).float()) + (1 - leak) * ff  # reset to zero and integrate
++        else:
++            v_out = v * leak + (1 - leak) * ff - z.gt(0).float() * thresh # subtract the thresh
++        # z denotes whether this neuron has fired or not in the previous step.
++
++        # # graded spike
++        # z_out = torch.relu(v_out - thresh) # fire
++
++        # spike
++        z_out = self.spike_fn(v_out, thresh, self.act_width)
++        # graded spike
++        z_out = z_out * (v_out - thresh)
++
++        return z_out + residual, torch.stack([v_out, z_out]) 
+ 
+ 
+ class ConvPLIF(nn.Module):
+@@ -567,6 +674,128 @@ class ConvLIFRecurrent(nn.Module):
+         z_out = self.spike_fn(v_out, thresh, self.act_width)
+ 
+         return z_out, torch.stack([v_out, z_out])
++    
++
++class ConvLIFRecurrent_Graded(nn.Module):
++    """
++    Convolutional recurrent spiking LIF cell.
++
++    Design choices:
++    - Arctan surrogate grad (Fang et al. 2021)
++    - Hard reset (Ledinauskas et al. 2020)
++    - Detach reset (Zenke et al. 2021)
++    - Multiply previous voltage with leak; incoming current with (1 - leak) (Fang et al. 2020)
++    - Make leak numerically stable with sigmoid (Fang et al. 2020)
++    - Learnable threshold instead of bias
++    - Per-channel leaks normally distributed (Yin et al. 2021)
++    """
++
++    def __init__(
++        self,
++        input_size,
++        hidden_size,
++        kernel_size,
++        activation="arctanspike",
++        act_width=10.0,
++        leak=(-4.0, 0.1),
++        thresh=(0.8, 0.0),
++        learn_leak=True,
++        learn_thresh=True,
++        hard_reset=True,
++        detach=True,
++        norm=None,
++    ):
++        super().__init__()
++
++        # shapes
++        padding = kernel_size // 2
++        self.input_size = input_size
++        self.hidden_size = hidden_size
++
++        # parameters
++        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding, bias=False)
++        self.rec = nn.Conv2d(hidden_size, hidden_size, kernel_size, padding=padding, bias=False)
++        if learn_leak:
++            self.leak = nn.Parameter(torch.randn(hidden_size, 1, 1) * leak[1] + leak[0])
++        else:
++            self.register_buffer("leak", torch.randn(hidden_size, 1, 1) * leak[1] + leak[0])
++        if learn_thresh:
++            # self.thresh = nn.Parameter(torch.randn(hidden_size, 1, 1) * thresh[1] + thresh[0])
++            self.thresh = nn.Parameter(torch.zeros(hidden_size, 1, 1)) # initialize the threshold to zeros to get more spikes
++        else:
++            self.register_buffer("thresh", torch.randn(hidden_size, 1, 1) * thresh[1] + thresh[0])
++
++        # weight init
++        w_scale_ff = math.sqrt(1 / input_size)
++        w_scale_rec = math.sqrt(1 / hidden_size)
++        nn.init.uniform_(self.ff.weight, -w_scale_ff, w_scale_ff)
++        nn.init.uniform_(self.rec.weight, -w_scale_rec, w_scale_rec)
++
++        # spiking and reset mechanics
++        assert isinstance(
++            activation, str
++        ), "Spiking neurons need a valid activation, see models/spiking_util.py for choices"
++        self.spike_fn = getattr(spiking, activation)
++        self.register_buffer("act_width", torch.tensor(act_width))
++        self.hard_reset = hard_reset
++        self.detach = detach
++
++        # norm
++        if norm == "weight":
++            self.ff = nn.utils.weight_norm(self.ff)
++            self.rec = nn.utils.weight_norm(self.rec)
++            self.norm_ff = None
++            self.norm_rec = None
++        elif norm == "group":
++            groups_ff = min(1, input_size // 4)  # at least instance norm
++            groups_rec = min(1, hidden_size // 4)  # at least instance norm
++            self.norm_ff = nn.GroupNorm(groups_ff, input_size)
++            self.norm_rec = nn.GroupNorm(groups_rec, hidden_size)
++        else:
++            self.norm_ff = None
++            self.norm_rec = None
++
++    def forward(self, input_, prev_state):
++        # input current
++        if self.norm_ff is not None:
++            input_ = self.norm_ff(input_)
++        ff = self.ff(input_)
++
++        # generate empty prev_state, if None is provided
++        if prev_state is None:
++            prev_state = torch.zeros(2, *ff.shape, dtype=ff.dtype, device=ff.device)
++        v, z = prev_state  # unbind op, removes dimension
++
++        # recurrent current
++        if self.norm_rec is not None:
++            z = self.norm_rec(z)
++        rec = self.rec(z) # conv the spikes of the previous time step
++
++        # clamp thresh
++        thresh = self.thresh.clamp_min(0.01)
++
++        # get leak
++        leak = torch.sigmoid(self.leak)
++
++        # detach reset
++        if self.detach:
++            z = z.detach()
++
++        # voltage update: decay, reset, add
++        if self.hard_reset:
++            v_out = v * leak * (1 - z.gt(0).float()) + (1 - leak) * (ff + 0.75 * rec)  # reset to zero and integrate # NOTE bigger than 0.75 will cause a strange CUDA error and the regularization loss to become very big to inf
++        else:
++            v_out = v * leak + (1 - leak) * (ff + rec) - z.gt(0).float() * thresh # subtract the thresh
++
++        # # graded spike
++        # z_out = torch.relu(v_out - thresh) # fire
++
++        # spike
++        z_out = self.spike_fn(v_out, thresh, self.act_width)
++        # graded spike
++        z_out = z_out * (v_out - thresh)
++
++        return z_out, torch.stack([v_out, z_out])
+ 
+ 
+ class ConvPLIFRecurrent(nn.Module):
+diff --git a/models/submodules.py b/models/submodules.py
+index b2b19f6..0a43368 100644
+--- a/models/submodules.py
++++ b/models/submodules.py
+@@ -605,6 +605,99 @@ class ConvRecurrentFATReLU(nn.Module): #
+ 
+         return out, state_spasified, state
+     
++class ConvRecurrentFATReLU_2Conv(nn.Module): # 
++    """
++    Convolutional recurrent cell (for direct comparison with spiking nets).
++    """
++
++    def __init__(self, input_size, hidden_size, kernel_size, activation=None, NoConvState=False):
++        super().__init__()
++
++        padding = kernel_size // 2
++        self.input_size = input_size
++        self.hidden_size = hidden_size
++
++        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
++        if NoConvState:
++            print("No rec=self.rec(prev_state)! rec=prev_state*self.scale_hidden_state")
++            self.scale_hidden_state = nn.Parameter(torch.ones(1) * 1e-6) # initialize with a random selected (small?) value
++        else:
++            self.rec = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
++
++        assert activation is None, "ConvRecurrentS activation cannot be set (just for compatibility)"
++
++        self.train_thre_acti_rec = True # if True, thre_acti_rec is trainable
++        print("FATReLU for the activation function of 2Conv recurrent neuron states!")
++
++        # if self.train_thre_acti_rec:
++        self.thre_acti_rec = nn.Parameter(torch.ones(hidden_size, 1, 1) * 1e-6) # initialize with a small value
++
++        self.NoConvState = NoConvState
++        
++    def forward(self, input_, prev_state):
++        # generate empty prev_state, if None is provided
++        if prev_state is None:
++            batch, _, height, width = input_.shape
++            state_shape = (batch, self.hidden_size, height, width)
++            prev_state = torch.zeros(*state_shape, dtype=input_.dtype, device=input_.device)
++
++        ff = self.ff(input_)
++
++        if self.NoConvState:
++            rec = prev_state * self.scale_hidden_state
++        else:
++            rec = self.rec(prev_state)
++
++        state = torch.relu(ff + rec)
++        out = state
++
++        return out, state
++    
++
++class ConvNoRecurrentFATReLU(nn.Module): # NOTE Only difference is no recurrency.
++    """
++    Convolutional recurrent cell (for direct comparison with spiking nets).
++    """
++
++    def __init__(self, input_size, hidden_size, kernel_size, activation=None):
++        super().__init__()
++
++        padding = kernel_size // 2
++        self.input_size = input_size
++        self.hidden_size = hidden_size
++
++        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
++        self.out = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
++        assert activation is None, "ConvRecurrentS activation cannot be set (just for compatibility)"
++
++        self.train_thre_acti_rec = True # if True, thre_acti_rec is trainable
++        print("No Recurrent! FATReLU for both Convs!")
++
++        # if self.train_thre_acti_rec:
++        self.thre_acti_rec = nn.Parameter(torch.ones(hidden_size, 1, 1) * 1e-6) # initialize with a small value
++        
++    def forward(self, input_, prev_state):
++        # generate empty prev_state, if None is provided
++        if prev_state is None:
++            batch, _, height, width = input_.shape
++            state_shape = (batch, self.hidden_size, height, width)
++            prev_state = torch.zeros(*state_shape, dtype=input_.dtype, device=input_.device)
++
++        ff = self.ff(input_)
++
++        state = torch.relu(ff)
++
++        # if self.train_thre_acti_rec:
++        activation_map = binarize(state-torch.abs(self.thre_acti_rec)) # silencing neurons with activation close to zero, abs below |thre_acti_rec|
++        state_spasified = state * activation_map
++        # else:
++        #     state_spasified = state
++
++        out = self.out(state_spasified)
++        out = torch.relu(out)
++
++        return out, state_spasified, state
++    
+ 
+ class ConvRecurrentGradedLIF(nn.Module): # 
+     """
+@@ -617,18 +710,26 @@ class ConvRecurrentGradedLIF(nn.Module): #
+         self.input_size = input_size
+         self.hidden_size = hidden_size
+ 
+-        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
++        self.ff = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding, bias=False)
++
++        self.leak = nn.Parameter(torch.ones(hidden_size, 1, 1) * 2.0)
+ 
+-        self.leak = nn.Parameter(torch.ones(hidden_size, 1, 1) * 0.8)
++        self.threshold = nn.Parameter(torch.ones(hidden_size, 1, 1) * 1e-6)
+ 
+         self.out = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding)
+ 
+         assert activation is None, "ConvRecurrentS activation cannot be set (just for compatibility)"
+ 
+-        print("ConvRecurrentGradedLIF!")
++        self.recurrent = True
++
++        if self.recurrent:
++            self.rec = nn.Conv2d(input_size, hidden_size, kernel_size, padding=padding, bias=False)
++            print("ConvRecurrentGradedLIF! Note! required manually set in class ConvRecurrentGradedLIF!")
++        else:
++            print("ConvGradedLIF! Note! required manually set in class ConvRecurrentGradedLIF!")
++
++        self.relu6 = nn.ReLU6()
+ 
+-        self.threshold = nn.Parameter(torch.ones(hidden_size, 1, 1) * 1e-6) # initialize with a small value
+-        
+     def forward(self, input_, prev_state):
+ 
+         ff = self.ff(input_)
+@@ -637,12 +738,20 @@ class ConvRecurrentGradedLIF(nn.Module): #
+             prev_state = torch.zeros(2, *ff.shape, dtype=ff.dtype, device=ff.device)
+         prev_out_LIF, state = prev_state
+ 
++        if self.recurrent:
++            rec = self.rec(prev_out_LIF)
++            integrate = ff + rec
++        else:
++            integrate = ff
++
+         # state = state - prev_out_LIF.detach() # reset to abs(self.threshold)
+         state = state * (1.0 - prev_out_LIF.detach().gt(0).float()) # hard reset to zero
+ 
+-        state = state * self.leak + (1.0 - self.leak) * ff # leak and integrate
++        leak = torch.sigmoid(self.leak)
++        state = state * leak + (1.0 - leak) * integrate # leak and integrate
+ 
+-        out_LIF = torch.relu(state - torch.abs(self.threshold)) # fire
++        out_LIF = self.relu6(state - torch.abs(self.threshold)) / 6.0 # fire # the output can only be between 0 and 1
++        # out_LIF = torch.relu(state - torch.abs(self.threshold))
+ 
+         out = self.out(out_LIF)
+         out = torch.relu(out)
+diff --git a/train_flow.py b/train_flow.py
+index de6f923..4b124e5 100644
+--- a/train_flow.py
++++ b/train_flow.py
+@@ -10,6 +10,7 @@ from configs.parser import YAMLParser
+ from dataloader.h5 import H5Loader
+ from loss.flow import EventWarping
+ from models.model import (
++    FireNet_Sparsify,
+     FireNet,
+     RNNFireNet,
+     LeakyFireNet,
+@@ -22,6 +23,7 @@ from models.model import (
+     RNNRecEVFlowNet,
+ )
+ from models.model import (
++    Graded_LIFFireNet,
+     LIFFireNet,
+     PLIFFireNet,
+     ALIFFireNet,
+@@ -45,6 +47,10 @@ def train(args, config_parser):
+     if config["data"]["mode"] == "frames":
+         print("Config error: Training pipeline not compatible with frames mode.")
+         raise AttributeError
++    
++    # regularizer_weight = config["sparsify"]["regularizer_weight"]
++    config["sparsify"]["regularizer_weight_voltage"] = float(args.regularizer_weight_voltage)
++    config["sparsify"]["regularizer_weight_threshold"] = float(args.regularizer_weight_threshold)
+ 
+     # log config
+     mlflow.set_experiment(config["experiment"])
+@@ -57,6 +63,10 @@ def train(args, config_parser):
+     # log git diff
+     save_diff("train_diff.txt")
+ 
++    regularizer_weight_threshold = float(config["sparsify"]["regularizer_weight_threshold"])
++    regularizer_weight_voltage = float(config["sparsify"]["regularizer_weight_voltage"])
++    print("regularizer_weight_threshold:", regularizer_weight_threshold, "regularizer_weight_voltage:", regularizer_weight_voltage)
++
+     # initialize settings
+     device = config_parser.device
+     kwargs = config_parser.loader_kwargs
+@@ -118,8 +128,6 @@ def train(args, config_parser):
+             torch.mean(model.G2.thre_acti_rec),
+             torch.mean(model.thre_x6),
+             torch.mean(model.thre_x7)))
+-        
+-    regularizer_weight = config["sparsify"]["regularizer_weight"]
+ 
+     model.train()
+ 
+@@ -140,7 +148,10 @@ def train(args, config_parser):
+     end_train = False
+     grads_w = []
+ 
+-    sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0, '2:G1_state': 0, '5:G2_state': 0} # Yingfu: only for FireNet
++    if 'LIF' in config["model"]["name"] or config["model"]["RNN_2Conv_FATReLU"]:
++        sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0}
++    else:
++        sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0, '2:G1_state': 0, '5:G2_state': 0} # Yingfu: only for FireNet
+ 
+     if config["sparsify"]["regularizer_voltage"] == "Hoyer":
+         regularizer_voltage = 0
+@@ -159,7 +170,8 @@ def train(args, config_parser):
+         regularizer_threshold = 2
+ 
+     data_counter = 0
+-    regularizer = 0
++    regularizer_loss_voltage = 0
++    regularizer_loss_thresh = 0
+     regularizer_print = 0
+ 
+     # training loop
+@@ -187,12 +199,12 @@ def train(args, config_parser):
+                         save_model_best(model)
+                         print("save the best model")
+                         best_loss = train_loss / (data.samples + 1)
+-                    elif data.epoch > 95:
+-                        print("save the last models")
+-                        save_model_tail(model, data.epoch)
+-                    else:
+-                        print("save the latest model")
+-                        save_model_latest(model)
++                    # elif data.epoch > 95:
++                    #     print("save the last models")
++                    #     save_model_tail(model, data.epoch)
++                    # else:
++                    #     print("save the latest model")
++                    #     save_model_latest(model)
+ 
+ 
+                 data.epoch += 1
+@@ -214,7 +226,10 @@ def train(args, config_parser):
+                     print(key, value.data/data_counter, end="  ")
+                 print("\n")
+ 
+-                sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0, '2:G1_state': 0, '5:G2_state': 0} # Yingfu: only for FireNet
++                if 'LIF' in config["model"]["name"] or config["model"]["RNN_2Conv_FATReLU"]:
++                    sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0}
++                else:
++                    sparsity_sum = {'0:input': 0, '1:head': 0, '2:G1': 0, '3:R1a': 0, '4:R1b': 0, '5:G2': 0, '6:R2a': 0, '7:R2b': 0, '8:pred': 0, '2:G1_state': 0, '5:G2_state': 0} # Yingfu: only for FireNet
+ 
+                 data_counter = 0
+ 
+@@ -239,24 +254,31 @@ def train(args, config_parser):
+             # for key, value in x["activity"].items():
+             for key, value in x["acti_after_thresholding"].items():
+ 
+-                sparsity[key] = torch.count_nonzero(value.detach()) / torch.numel(value.detach()) # for ann, sparsity of each layer, the avg of this batch
+-                # sparsity[key] = torch.count_nonzero(value[1, :].detach()) / torch.numel(value[1, :].detach()) # value[1, :] is spike. spike sparsity of each layer, the avg of this batch, # TODO for SNN
++                sparsity[key] = torch.count_nonzero(value.detach()) / torch.numel(value.detach()) # sparsity of each layer, the avg of this batch
++
+                 sparsity_sum[key] += sparsity[key]
+-                
++
++            sparsity.pop("0:input")
++            sparsity.pop("8:pred")
++
++            max_density_layer = max(sparsity, key=sparsity.get) # find the densest layer and give it a larger weight in the regularizer
++
+             if config["sparsify"]["regularize_voltage_enable"]:
+-                for key, value in x["activity"].items(): # one regularizer for each layer
++                for key, voltage in x["activity"].items(): # one regularizer for each layer
+                     if key != "0:input" and key != "8:pred":
+-                        
+-                        # regularizer += torch.pow(torch.sum(torch.abs(value[0, :])), 2) / (torch.sum(torch.pow(value[0, :], 2)) + 1e-5) # value[0, :] is voltage. Hoyer sparsity regularizer SNN voltage # TODO
+-                        # regularizer += torch.sum(torch.abs(value[0, :])) # L1 sparsity regularizer SNN voltage # TODO
+-                        # regularizer += torch.sum(torch.pow(value[0, :], 2)) # L2 sparsity regularizer SNN voltage # TODO
++
++                        if max_density_layer == key:
++                            reg_weight_layer = 2.0
++                            # print(key)
++                        else:
++                            reg_weight_layer = 1.0
+ 
+                         if regularizer_voltage == 0:
+-                            regularizer += torch.pow(torch.sum(value), 2) / (torch.sum(torch.pow(value, 2)) + 1e-5) # Hoyer sparsity regularizer ANN neuron states NOTE it is applied to each layer. TODO each channel? all neurons in the network?
++                            regularizer_loss_voltage += reg_weight_layer * torch.pow(torch.sum(torch.abs(voltage)), 2) / (torch.sum(torch.pow(voltage, 2)) + 1e-5) # Hoyer sparsity regularizer ANN neuron states NOTE it is applied to each layer. TODO each channel? all neurons in the network?
+                         elif regularizer_voltage == 1:
+-                            regularizer += torch.sum(torch.abs(value)) # L1 sparsity regularizer
++                            regularizer_loss_voltage += reg_weight_layer * torch.sum(torch.abs(voltage)) # L1 sparsity regularizer
+                         else:
+-                            regularizer += torch.sum(torch.pow(value, 2)) # L2 sparsity regularizer
++                            regularizer_loss_voltage += reg_weight_layer * torch.sum(torch.pow(voltage, 2)) # L2 sparsity regularizer
+                         # print(key)
+ 
+             if config["sparsify"]["regularize_threshold_enable"]:
+@@ -268,10 +290,15 @@ def train(args, config_parser):
+                 for name, param in model.named_parameters():
+                     if threshold_name in name:
+                         # print(name)
++                        if name.split('.')[0] == max_density_layer.split(':')[1]:
++                            reg_weight_layer = 2.0
++                            # print(name)
++                        else:
++                            reg_weight_layer = 1.0
+                         if regularizer_threshold == 2: # currently we only use L2 regularizer for threshold
+-                            regularizer += torch.sum(torch.pow(1.0/(torch.abs(param)+1e-9), 2)) # L2 regularizer_thresh
++                            regularizer_loss_thresh += reg_weight_layer * torch.sum(torch.pow(1.0/(torch.abs(param)+1e-9), 2)) # L2 regularizer_thresh
+                         elif regularizer_threshold == 0:
+-                            regularizer += torch.pow(torch.sum(1.0/torch.abs(param)), 2) / (torch.sum(torch.pow((1.0/torch.abs(param)), 2)) + 1e-5) # Hoyer regularizer_thresh
++                            regularizer_loss_thresh += reg_weight_layer * torch.pow(torch.sum(1.0/torch.abs(param)), 2) / (torch.sum(torch.pow((1.0/torch.abs(param)), 2)) + 1e-5) # Hoyer regularizer_thresh
+             # print(regularizer)   
+ 
+             # backward pass
+@@ -281,13 +308,16 @@ def train(args, config_parser):
+                 if config["loss"]["overwrite_intermediate"]:
+                     loss_function.overwrite_intermediate_flow(x["flow"])
+ 
+-                regularizer_print += regularizer.item() / 10
++                regularizer_loss = regularizer_loss_voltage * regularizer_weight_voltage + regularizer_loss_thresh * regularizer_weight_threshold
++
++                if regularizer_loss != 0:
++                    regularizer_print += regularizer_loss.item() / 10
+ 
+-                regularizer = regularizer / (10 * config["loader"]["batch_size"]) # the avg loss for each sample (sum of all layers). 10 is the number of frames before backward pass.
++                regularizer_loss = regularizer_loss / (10 * config["loader"]["batch_size"]) # the avg loss for each sample (sum of all layers). 10 is the number of frames before backward pass.
+ 
+                 # loss
+                 deblur_loss = loss_function()
+-                loss = deblur_loss + regularizer * regularizer_weight
++                loss = deblur_loss + regularizer_loss # * regularizer_weight
+                 train_loss += deblur_loss.item()
+                 
+                 # update number of loss samples seen by the network
+@@ -295,7 +325,8 @@ def train(args, config_parser):
+ 
+                 loss.backward()
+ 
+-                regularizer = 0
++                regularizer_loss_voltage = 0
++                regularizer_loss_thresh = 0
+ 
+                 # clip and save grads
+                 if config["loss"]["clip_grad"] is not None:
+@@ -326,7 +357,8 @@ def train(args, config_parser):
+             if config["vis"]["verbose"]:
+                 if config["model"]["train_FATReLU_thre_enabled"]:
+                     print(
+-                        "Train Epoch: {:04d} [{:03d}/{:03d} ({:03d}%)]  Loss: {:.6f}  Reg: {:.3f}  FATReLU_t: {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}".format(
++                        # "Train Epoch: {:04d} [{:03d}/{:03d} ({:03d}%)]  Loss: {:.6f}  Reg: {:.3f}  FATReLU_t: {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}".format(
++                        "Train Epoch: {:04d} [{:03d}/{:03d} ({:03d}%)]  Loss: {:.6f}  Reg: {:.3f}  FATReLU_t: {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}  {:.6f}".format(
+                             data.epoch,
+                             data.seq_num,
+                             len(data.files),
+@@ -335,11 +367,11 @@ def train(args, config_parser):
+                             regularizer_print / (data.samples + 1),
+                             torch.mean(model.thre_x1),
+                             torch.mean(model.thre_x2),
+-                            torch.mean(model.G1.threshold), # torch.mean(model.G1.thre_acti_rec),
++                            # torch.mean(model.G1.threshold), # torch.mean(model.G1.thre_acti_rec), # when use 2Conv RNN, no such threshold
+                             torch.mean(model.thre_x3),
+                             torch.mean(model.thre_x4),
+                             torch.mean(model.thre_x5),
+-                            torch.mean(model.G2.threshold), # torch.mean(model.G2.thre_acti_rec),
++                            # torch.mean(model.G2.threshold), # torch.mean(model.G2.thre_acti_rec),
+                             torch.mean(model.thre_x6),
+                             torch.mean(model.thre_x7)
+                         ),
+@@ -380,6 +412,16 @@ if __name__ == "__main__":
+         default="",
+         help="pre-trained model to use as starting point",
+     )
++    parser.add_argument(
++        "--regularizer_weight_voltage",
++        default="",
++        help="",
++    )
++    parser.add_argument(
++        "--regularizer_weight_threshold",
++        default="",
++        help="",
++    )
+     args = parser.parse_args()
+ 
+     # launch training
+diff --git a/train_server.sh b/train_server.sh
+index 4dc774d..3fd5461 100644
+--- a/train_server.sh
++++ b/train_server.sh
+@@ -3,7 +3,8 @@
+ 
+ 
+ # echo "Marvin: Hoyer regularizer for 1.0/thresh (sum of all layers) 6.0e-7, Hoyer regularizer for neuron states after ReLU before FATReLU (sum of all layers) 6.0e-7 "
+-echo "Marvin: L2 regularizer for 1.0/thresh (sum of all layers) 0.5e-7, L1 regularizer for neuron states after ReLU before FATReLU (sum of all layers) 0.5e-7, GradedLIF_RNN"
++# echo "Marvin: regularizer_weight: 0.25e-7 (L2 regularizer for 1.0/thresh (sum of all layers), L1 regularizer for neuron states after ReLU before FATReLU (sum of all layers)), using ConvRecurrentGradedLIF, relu6"
++# echo "ANN FATReLU_RNN_2Conv, OneCycleLR, Double punish densest layer" # (No RNN) Graded_LIFFireNet LIFFireNet
+  
+ # echo "Marvin: L2 regularizer for 1.0/thresh (sum of all layers) 3.5e-7, L1 regularizer for neuron states after ReLU before FATReLU (sum of all layers) 3.5e-7, test RNN sparsify"   
+ 
+@@ -14,11 +15,28 @@ echo "Marvin: L2 regularizer for 1.0/thresh (sum of all layers) 0.5e-7, L1 regul
+ # echo "Godzilla: L2 regularizer for 1.0/thresh (sum of all layers) 4.0e-7, L1 regularizer for neuron states after ReLU before FATReLU (sum of all layers) 4.0e-7, same threshold for all channels"   
+ # echo "Godzilla: No FATReLU, Hoyer regularizer for neuron states after ReLU 1.0e-7 "
+ 
+-# echo "Run the training later, after 4 hours"
+-# sleep 14400
++# echo "Run the training later, after 1 hours"
++# sleep 3000
+ # echo "Oops! I fell asleep for xxx seconds! Now train the network!" # 
+ 
+-# For marvin # export CUDA_VISIBLE_DEVICES=MIG-f4599915-68de-590c-9cef-3249dae513f1 
+-python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin
++# For marvin # export CUDA_VISIBLE_DEVICES=MIG-fcc6318b-d31b-58d4-a6cb-bdb00c2aeb5d
++
++# python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_FATReLU_RNN_2Conv --regularizer_weight_voltage=4.5e-7 --regularizer_weight_threshold=4.5e-7
++# python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_FATReLU_RNN_2Conv --regularizer_weight_voltage=5.5e-7 --regularizer_weight_threshold=5.5e-7
++# python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_FATReLU_RNN_2Conv --regularizer_weight_voltage=6.5e-7 --regularizer_weight_threshold=6.5e-7
++# python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_FATReLU_RNN_2Conv --regularizer_weight_voltage=7.5e-7 --regularizer_weight_threshold=7.5e-7
++
++python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_NOFATReLU_RNN_2Conv --regularizer_weight_voltage=5.0e-7 --regularizer_weight_threshold=5.0e-7
++python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_NOFATReLU_RNN_2Conv --regularizer_weight_voltage=5.5e-7 --regularizer_weight_threshold=5.5e-7
++python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin_NOFATReLU_RNN_2Conv --regularizer_weight_voltage=6.0e-7 --regularizer_weight_threshold=6.0e-7
++
++# python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_GLIF --regularizer_weight_voltage=12.5e-6 --regularizer_weight_threshold=12.5e-6
++# python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_GLIF --regularizer_weight_voltage=13.5e-6 --regularizer_weight_threshold=13.5e-6
++
++# python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.15e-7 --regularizer_weight_threshold=2.15e-7
++# python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.20e-7 --regularizer_weight_threshold=2.20e-7
++# python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.25e-7 --regularizer_weight_threshold=2.25e-7
++
++
+ # python train_flow.py --config configs/train_ANN_G.yml --path_mlflow=marvin --prev_runid=f9f9f18812eb41bb86e82a75f4413162
+ 

@@ -1,0 +1,12 @@
+AEE:
+  avg: '3.783901391473896'
+  indoor_flying1_data.h5: '3.2412204890958547'
+  indoor_flying2_data.h5: '5.476420400132397'
+  indoor_flying3_data.h5: '4.447194217134859'
+  outdoor_day1_data.h5: '1.9707704595324735'
+AEE_percent:
+  avg: '0.4089061981660085'
+  indoor_flying1_data.h5: '0.3922510745880857'
+  indoor_flying2_data.h5: '0.5700326699185667'
+  indoor_flying3_data.h5: '0.49022632900691265'
+  outdoor_day1_data.h5: '0.18311471915046865'

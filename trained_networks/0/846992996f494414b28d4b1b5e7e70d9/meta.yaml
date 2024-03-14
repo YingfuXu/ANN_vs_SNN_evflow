@@ -1,0 +1,15 @@
+artifact_uri: /trained_networks/0/846992996f494414b28d4b1b5e7e70d9/artifacts
+end_time: 1686658454952
+entry_point_name: ''
+experiment_id: '968929596763382504'
+lifecycle_stage: active
+run_id: 846992996f494414b28d4b1b5e7e70d9
+run_name: sassy-shark-650
+run_uuid: 846992996f494414b28d4b1b5e7e70d9
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1686430418398
+status: 3
+tags: []
+user_id: YF

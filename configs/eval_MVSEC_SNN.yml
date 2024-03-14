@@ -1,0 +1,36 @@
+data:
+    path: /data/yingfu/datasets/test_MVSEC/  #  /home/adr/datasets/event_flow/test_MVSEC/
+    mode: gtflow_dt4 # gtflow_dt1/gtflow_dt4
+    window: 0.25 # 1 for dt1, 0.25 for dt4
+    window_eval: 15000 # not used
+
+model:
+    mask_output: True
+    train_FATReLU_thre_enabled: False
+
+metrics:
+    name: [AEE]  # FWL, RSAT, AEE
+    flow_scaling: 128
+
+loader:
+    batch_size: 1
+    resolution: [256, 256] # H x W  256, 256
+    augment: []
+    gpu: 0
+
+logging:
+    log_acti: False
+
+vis:
+    enabled: False
+    px: 400
+    bars: True
+    activity: True
+    store: False
+
+hot_filter:
+    enabled: True
+    max_px: 100
+    min_obvs: 5
+    max_rate: 0.8
+

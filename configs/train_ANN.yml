@@ -1,0 +1,60 @@
+experiment: train_on_server
+
+data:
+    path: /data/yingfu/datasets/train_uzhfpv/
+    mode: events # events
+    window: 1000 # events
+    window_loss: 10000 # events
+
+model:
+    name: FireNet_Sparsify # for other models available, see models/model.py
+    encoding: cnt # voxel/cnt
+    round_encoding: False # for voxel encoding
+    norm_input: False # normalize input
+    num_bins: 2
+    base_num_channels: 32
+    kernel_size: 3
+    activations: [relu, Null] # activations for ff and rec neurons
+    mask_output: True
+    train_FATReLU_thre_enabled: True # True False
+
+sparsify:
+    regularize_voltage_enable: True
+    regularizer_voltage: L1 # L1 L2 Hoyer
+    regularize_threshold_enable: True
+    regularizer_threshold: L2 #  L2 Hoyer
+    regularizer_weight_voltage: 1.0 # to be overwritten by --input
+    regularizer_weight_threshold: 1.0 # to be overwritten by --input
+
+spiking_neuron: Null
+    
+loss:
+    flow_regul_weight: 0.001
+    clip_grad: 100.0 # set to Null to disable
+    overwrite_intermediate: False
+
+optimizer:
+    name: AdamW # AdamW Adam
+    lr: 0.0002 # 0.0002 2e-4 for training, 2e-4 for fine-tuning (for now)
+    weight_decay: 0.01 # 0.01 is the default of AdamW
+    OneCycleLR_scheduler: True
+
+loader:
+    n_epochs: 100 # 100 for training, 20 for fine-tuning (for now)
+    batch_size: 8
+    resolution: [128, 128] # H x W
+    augment: ["Horizontal", "Vertical", "Polarity"]
+    augment_prob: [0.5, 0.5, 0.5]
+    gpu: 0
+
+vis:
+    verbose: True
+    enabled: False
+    px: 400
+    store_grads: False
+
+hot_filter:
+    enabled: False
+    max_px: 100
+    min_obvs: 5
+    max_rate: 0.8

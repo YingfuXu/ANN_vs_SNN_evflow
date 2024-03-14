@@ -1,0 +1,31 @@
+diff --git a/eval_flow.py b/eval_flow.py
+index ce0179f..f013bee 100644
+--- a/eval_flow.py
++++ b/eval_flow.py
+@@ -5,7 +5,7 @@ import numpy as np
+ import torch
+ from torch.optim import *
+ 
+-from models.final_network import FireNet_ANN_Sparsify
++# from final_network import FireNet_ANN_Sparsify
+ 
+ import os
+ 
+diff --git a/train_server.sh b/train_server.sh
+index 4fbc3e5..51e088a 100644
+--- a/train_server.sh
++++ b/train_server.sh
+@@ -51,8 +51,13 @@
+ # python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_GLIF --regularizer_weight_voltage=12.5e-6 --regularizer_weight_threshold=12.5e-6
+ # python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_GLIF --regularizer_weight_voltage=13.5e-6 --regularizer_weight_threshold=13.5e-6
+ 
++
+ python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.1e-7 --regularizer_weight_threshold=2.1e-7
+ python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.2e-7 --regularizer_weight_threshold=2.2e-7
++python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.3e-7 --regularizer_weight_threshold=2.3e-7
++python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.4e-7 --regularizer_weight_threshold=2.4e-7
++python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.5e-7 --regularizer_weight_threshold=2.5e-7
++python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.6e-7 --regularizer_weight_threshold=2.6e-7
+ # python train_flow.py --config configs/train_SNN_G.yml --path_mlflow=marvin_LIF --regularizer_weight_voltage=2.25e-7 --regularizer_weight_threshold=2.25e-7
+ 
+ 

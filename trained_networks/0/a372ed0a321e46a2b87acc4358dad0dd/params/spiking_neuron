@@ -1,0 +1,1 @@
+{'leak': [-4.0, 0.1], 'thresh': [0.8, 0.1], 'learn_leak': True, 'learn_thresh': True, 'hard_reset': True}

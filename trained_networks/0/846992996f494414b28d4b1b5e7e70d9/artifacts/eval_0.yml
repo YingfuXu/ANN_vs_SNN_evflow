@@ -1,0 +1,78 @@
+data:
+  mode: gtflow_dt4
+  path: /data/yingfu/datasets/test_MVSEC/
+  window: 0.25
+  window_eval: 15000
+  window_loss: 10000
+experiment: Default
+hot_filter:
+  enabled: true
+  max_px: 100
+  max_rate: 0.8
+  min_obvs: 5
+loader:
+  augment: []
+  augment_prob:
+  - 0.5
+  - 0.5
+  - 0.5
+  batch_size: 1
+  gpu: 0
+  n_epochs: 100
+  resolution:
+  - 256
+  - 256
+  seed: 0
+logging:
+  log_acti: false
+loss:
+  clip_grad: 100.0
+  flow_regul_weight: 0.001
+  overwrite_intermediate: false
+metrics:
+  flow_scaling: 128
+  name:
+  - AEE
+model:
+  GradedLIF_RNN: false
+  RNN_2Conv_FATReLU: true
+  RNN_No_Conv_State: false
+  RNN_hidden_state_FATReLU: false
+  activations:
+  - relu
+  - null
+  base_num_channels: 32
+  encoding: cnt
+  kernel_size: 3
+  mask_output: true
+  name: FireNet_Sparsify
+  norm_input: false
+  num_bins: 2
+  round_encoding: false
+  single_RNN: false
+  spiking_neuron: None
+  thresholding_acti_RNN_hidden_state: false
+  train_FATReLU_thre_enabled: false
+optimizer:
+  OneCycleLR_scheduler: true
+  lr: 0.0002
+  name: AdamW
+  weight_decay: 0.01
+prev_runid: ''
+sparsify:
+  FATReLU_thre_init: None
+  regularize_threshold_enable: false
+  regularize_voltage_enable: true
+  regularizer_threshold: L2
+  regularizer_voltage: L1
+  regularizer_weight: 1.0
+  regularizer_weight_threshold: 6.0e-07
+  regularizer_weight_voltage: 6.0e-07
+vis:
+  activity: true
+  bars: true
+  enabled: false
+  px: 400
+  store: false
+  store_grads: false
+  verbose: true

@@ -1,0 +1,1 @@
+{'regularize_voltage_enable': True, 'regularizer_voltage': 'L1', 'regularize_threshold_enable': False, 'regularizer_threshold': 'L2', 'FATReLU_thre_init': 'None', 'regularizer_weight': 1.0, 'regularizer_weight_voltage': 6e-07, 'regularizer_weight_threshold': 6e-07}
