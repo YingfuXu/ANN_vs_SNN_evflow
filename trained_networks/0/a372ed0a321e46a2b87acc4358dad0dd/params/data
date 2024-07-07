@@ -1,1 +1,1 @@
-{'mode': 'events', 'window': 1000, 'path': '/data/yingfu/datasets/train_uzhfpv/', 'window_loss': 10000}
+{'mode': 'events', 'window': 1000, 'path': '/train_uzhfpv/', 'window_loss': 10000}

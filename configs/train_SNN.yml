@@ -1,7 +1,7 @@
 experiment: Default
 
 data:
-    path: /data/yingfu/datasets/train_uzhfpv/
+    path: /train_uzhfpv/
     mode: events # events
     window: 1000 # events
     window_loss: 10000 # events

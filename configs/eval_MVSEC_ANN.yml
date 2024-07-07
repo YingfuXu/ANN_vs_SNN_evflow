@@ -1,5 +1,5 @@
 data:
-    path: /data/yingfu/datasets/test_MVSEC/
+    path: /test_MVSEC/
     mode: gtflow_dt4 # gtflow_dt1/gtflow_dt4
     window: 0.25 # 1 for dt1, 0.25 for dt4
     window_eval: 15000 # not used
